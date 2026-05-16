@@ -8,6 +8,10 @@
 ![Platform](https://img.shields.io/badge/platform-Web-brightgreen)
 ![Languages](https://img.shields.io/badge/languages-33-orange)
 
+## 🌐 在线体验
+
+**[https://memoryflow.sj9292008133.workers.dev](https://memoryflow.sj9292008133.workers.dev)**
+
 ## ✨ 特性
 
 - **🎙️ 语音转文字** — 选择语言，按下按钮，持续录入
