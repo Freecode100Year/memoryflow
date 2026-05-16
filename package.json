@@ -1,0 +1,17 @@
+{
+  "name": "memoryflow",
+  "version": "1.0.0",
+  "description": "记忆流 MemoryFlow — 全平台语音记忆助手，支持33种语言，色盲友好，关闭即清除",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {
+    "memoryflow": "file:"
+  }
+}

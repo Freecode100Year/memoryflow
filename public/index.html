@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f7f5f0">
+<title>记忆流 MemoryFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ========================================
+   色盲友好色系
+   蓝 + 橙 为主色 (红绿色盲最安全的组合)
+   避免红/绿单独传达含义
+   所有状态同时用 图标+文字+颜色 三重提示
+   对比度全部 ≥ 4.5:1 (WCAG AA)
+   ======================================== */
+:root{
+  --bg:#f7f5f0;--bg2:#efece5;--bg3:#e5e1d8;--bg4:#d6d1c6;
+  --surface:#fff;
+  --tx:#2c2a25;--tx2:#5a574f;--tx3:#8a867d;--tx4:#b0ac a3;
+  /* 主色：蓝 (行动/激活) */
+  --blue:#1565c0;--blue-light:#e3f0fc;--blue-mid:#4a90d9;
+  /* 辅色：橙 (强调/录音中) */
+  --orange:#e67700;--orange-light:#fff3e0;--orange-mid:#f59e0b;
+  /* 状态色 (不单独依赖颜色) */
+  --on:#0d7c3d;--on-bg:#e6f4ea;
+  --off:#7a7670;--off-bg:#f0ede7;
+  --font:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --r:12px;--r2:20px;--r3:50%;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--font);color:var(--tx);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+
+/* 容器 */
+.app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%}
+@media(min-width:768px){
+  body{background:#e8e4dc;padding:24px;align-items:center;justify-content:center}
+  .app{height:min(820px,calc(100vh - 48px));border-radius:var(--r2);overflow:hidden;
+    box-shadow:0 8px 32px rgba(44,42,37,.12);background:var(--bg)}
+}
+
+/* ===== 顶部 ===== */
+.top{
+  flex-shrink:0;padding:14px 20px;text-align:center;
+  border-bottom:1px solid var(--bg3);background:var(--surface);
+}
+.top h1{font-size:18px;font-weight:600;color:var(--tx);letter-spacing:-.3px}
+.top p{font-size:12px;color:var(--tx3);margin-top:2px}
+.privacy{
+  display:inline-flex;align-items:center;gap:4px;
+  margin-top:6px;padding:3px 10px;border-radius:20px;
+  background:var(--blue-light);font-size:11px;color:var(--blue);font-weight:500;
+}
+
+/* ===== 语言选择 ===== */
+.lang{
+  flex-shrink:0;padding:12px 20px;background:var(--surface);
+  border-bottom:1px solid var(--bg3);
+}
+.lang select{
+  width:100%;padding:12px 40px 12px 16px;border-radius:var(--r);
+  background:var(--bg);border:2px solid var(--bg3);
+  color:var(--tx);font:500 16px/1.3 var(--font);cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg width='14' height='8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m1 1 6 6 6-6' stroke='%238a867d' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 16px center;
+  transition:border-color .2s;
+}
+.lang select:focus{outline:none;border-color:var(--blue)}
+
+/* ===== 时间线文本区 ===== */
+.timeline{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px}
+.timeline::-webkit-scrollbar{width:3px}
+.timeline::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:2px}
+
+.empty{
+  height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:12px;padding:20px;
+}
+.empty-icon{font-size:56px;opacity:.6;line-height:1}
+.empty-title{font-size:20px;font-weight:600;color:var(--tx)}
+.empty-desc{font-size:15px;color:var(--tx3);line-height:1.7;max-width:260px}
+
+/* 条目 */
+.entry{
+  padding:10px 14px;margin-bottom:8px;
+  background:var(--surface);border-radius:var(--r);
+  border-left:4px solid var(--blue);
+  box-shadow:0 1px 3px rgba(44,42,37,.06);
+}
+.entry-time{font-size:12px;font-weight:600;color:var(--blue);margin-bottom:4px;letter-spacing:.3px}
+.entry-text{font-size:17px;line-height:1.8;color:var(--tx);word-break:break-word}
+
+/* 正在输入 */
+.entry.entry-live{border-left-color:var(--orange);background:var(--orange-light)}
+.entry-live .entry-time{color:var(--orange)}
+.entry-live .entry-text{color:var(--tx3);font-style:italic}
+
+/* ===== 大圆按钮区域 ===== */
+.controls{
+  flex-shrink:0;
+  padding:20px 20px calc(24px + var(--safe-b));
+  background:var(--surface);
+  border-top:1px solid var(--bg3);
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+}
+
+/* 音量条 */
+.vol{width:100%;max-width:280px;height:4px;border-radius:2px;background:var(--bg3);overflow:hidden}
+.vol-fill{height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--orange));transition:width 80ms}
+
+/* 大圆按钮 */
+.rec-btn{
+  width:88px;height:88px;border-radius:var(--r3);border:none;cursor:pointer;
+  background:var(--blue);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;transition:all .2s;
+  box-shadow:0 4px 16px rgba(21,101,192,.25);
+  -webkit-tap-highlight-color:transparent;
+}
+.rec-btn:active{transform:scale(.92)}
+.rec-btn svg{width:32px;height:32px;fill:currentColor;transition:opacity .2s}
+.rec-btn .icon-stop{display:none}
+.rec-btn.on{background:var(--orange);box-shadow:0 4px 20px rgba(230,119,0,.3)}
+.rec-btn.on .icon-mic{display:none}
+.rec-btn.on .icon-stop{display:block}
+
+/* 脉冲动画 */
+.rec-btn.on::before{
+  content:'';position:absolute;inset:-6px;border-radius:var(--r3);
+  border:3px solid var(--orange);opacity:.5;
+  animation:ring 1.8s ease-in-out infinite;
+}
+@keyframes ring{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.12);opacity:0}}
+
+/* 状态文字 */
+.status{font-size:14px;font-weight:500;color:var(--tx3);display:flex;align-items:center;gap:6px}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-dot.s-idle{background:var(--off)}
+.status-dot.s-on{background:var(--orange);animation:blink 1.4s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* 时间 + 工具 */
+.info-row{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+}
+.timer{font:600 14px/1 var(--font);color:var(--tx2);min-width:48px}
+.tools{display:flex;gap:6px}
+.t-btn{
+  padding:7px 12px;border-radius:8px;border:none;cursor:pointer;
+  font:500 12px/1 var(--font);color:var(--tx2);
+  background:var(--bg);border:1px solid var(--bg3);
+  transition:all .1s;display:inline-flex;align-items:center;gap:4px;
+}
+.t-btn:active{transform:scale(.95);opacity:.6}
+
+/* ===== 分享面板 ===== */
+.overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(44,42,37,.35);
+}
+.overlay.open{display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:768px){.overlay.open{align-items:center}}
+.panel{
+  width:100%;max-width:480px;max-height:88vh;
+  background:var(--surface);border-radius:var(--r2) var(--r2) 0 0;
+  overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 -4px 24px rgba(44,42,37,.1);
+}
+@media(min-width:768px){.panel{border-radius:var(--r2);max-height:75vh}}
+.panel-head{
+  padding:16px 20px;border-bottom:1px solid var(--bg3);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.panel-head h2{font-size:16px;font-weight:600}
+.panel-close{
+  width:32px;height:32px;border-radius:8px;border:none;cursor:pointer;
+  background:var(--bg);color:var(--tx2);font-size:18px;display:grid;place-items:center;
+}
+.panel-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 20px}
+
+/* 分享按钮网格 */
+.share-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px}
+.share-item{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:14px 8px;border-radius:var(--r);cursor:pointer;
+  background:var(--bg);border:1px solid var(--bg3);
+  transition:all .12s;text-decoration:none;
+}
+.share-item:active{transform:scale(.94);opacity:.7}
+.share-icon{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px;color:#fff}
+.share-label{font-size:11px;color:var(--tx2);font-weight:500;text-align:center;line-height:1.3}
+.ic-native{background:var(--blue)}
+.ic-gmail{background:#ea4335}
+.ic-gdoc{background:#4285f4}
+.ic-wa{background:#25d366}
+.ic-tg{background:#0088cc}
+.ic-wechat{background:#07c160}
+.ic-line{background:#00c300}
+.ic-email{background:#6b7280}
+.ic-copy{background:var(--tx2)}
+.ic-md{background:#333}
+
+.share-sep{
+  grid-column:1/-1;font-size:11px;color:var(--tx4);
+  padding:8px 0 4px;border-top:1px solid var(--bg3);margin-top:4px;
+}
+
+/* Markdown 预览 */
+.md-pre{
+  margin-top:12px;padding:14px;border-radius:var(--r);
+  background:var(--bg);border:1px solid var(--bg3);
+  font:13px/1.7 monospace;color:var(--tx);
+  white-space:pre-wrap;word-break:break-word;
+  max-height:260px;overflow-y:auto;user-select:all;
+}
+
+/* toast */
+.toast{
+  position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-40px);
+  padding:10px 20px;border-radius:var(--r);
+  background:var(--tx);color:#fff;font:500 13px/1 var(--font);
+  opacity:0;transition:all .3s;pointer-events:none;z-index:300;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- 顶部 -->
+  <div class="top">
+    <h1>🧠 记忆流</h1>
+    <p>说过的话，都帮你记住</p>
+    <div class="privacy">🔒 关闭网页自动清除所有内容</div>
+  </div>
+
+  <!-- 语言选择 -->
+  <div class="lang">
+    <select id="langSel" aria-label="选择语言">
+      <option value="" disabled selected>选择语言开始录入 ▾</option>
+      <option value="auto">🔮 自动识别语言</option>
+      <optgroup label="常用语言">
+        <option value="zh">中文</option><option value="en">English</option>
+        <option value="ja">日本語</option><option value="ko">한국어</option>
+        <option value="es">Español</option><option value="fr">Français</option>
+        <option value="de">Deutsch</option><option value="ru">Русский</option>
+      </optgroup>
+      <optgroup label="亚洲 · 中东">
+        <option value="ar">العربية</option><option value="hi">हिन्दी</option>
+        <option value="th">ไทย</option><option value="vi">Tiếng Việt</option>
+        <option value="id">Indonesia</option><option value="ms">Melayu</option>
+        <option value="tl">Tagalog</option><option value="bn">বাংলা</option>
+        <option value="ur">اردو</option><option value="fa">فارسی</option>
+        <option value="pt">Português</option>
+      </optgroup>
+      <optgroup label="欧洲">
+        <option value="it">Italiano</option><option value="nl">Nederlands</option>
+        <option value="pl">Polski</option><option value="sv">Svenska</option>
+        <option value="da">Dansk</option><option value="no">Norsk</option>
+        <option value="fi">Suomi</option><option value="cs">Čeština</option>
+        <option value="hu">Magyar</option><option value="ro">Română</option>
+        <option value="el">Ελληνικά</option><option value="tr">Türkçe</option>
+        <option value="uk">Українська</option><option value="he">עברית</option>
+      </optgroup>
+    </select>
+  </div>
+
+  <!-- 时间线 -->
+  <div class="timeline" id="tl">
+    <div class="empty" id="emptyState">
+      <div class="empty-icon">🎙️</div>
+      <div class="empty-title">准备好了</div>
+      <div class="empty-desc">选择语言，按下圆形按钮开始录音<br>说的每句话都会记下来</div>
+    </div>
+  </div>
+
+  <!-- 控制区 -->
+  <div class="controls">
+    <div class="vol"><div class="vol-fill" id="volFill"></div></div>
+
+    <button class="rec-btn" id="recBtn" aria-label="开始录音" disabled>
+      <svg class="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V21h2v-3.07A7 7 0 0 0 19 11h-2z"/></svg>
+      <svg class="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+    </button>
+
+    <div class="status">
+      <span class="status-dot s-idle" id="sDot"></span>
+      <span id="sText">选择语言以启用</span>
+    </div>
+
+    <div class="info-row">
+      <span class="timer" id="timer">00:00</span>
+      <div class="tools">
+        <button class="t-btn" id="btnShare">📤 分享</button>
+        <button class="t-btn" id="btnClear">🗑 清空</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 分享面板 -->
+<div class="overlay" id="shareOverlay">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>📤 分享记录</h2>
+      <button class="panel-close" id="shareClose">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="share-grid" id="shareGrid">
+        <!-- JS 动态填充 -->
+      </div>
+      <div class="md-pre" id="mdPreview" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  记忆流 MemoryFlow v4
+//  色盲友好 · 大圆按钮 · sessionStorage · 多平台分享
+// ============================================================
+
+const BCP={zh:'zh-CN',en:'en-US',ja:'ja-JP',ko:'ko-KR',es:'es-ES',fr:'fr-FR',de:'de-DE',pt:'pt-BR',ru:'ru-RU',ar:'ar-SA',hi:'hi-IN',th:'th-TH',vi:'vi-VN',id:'id-ID',ms:'ms-MY',tl:'fil-PH',bn:'bn-BD',ur:'ur-PK',fa:'fa-IR',it:'it-IT',nl:'nl-NL',pl:'pl-PL',sv:'sv-SE',da:'da-DK',no:'nb-NO',fi:'fi-FI',cs:'cs-CZ',hu:'hu-HU',ro:'ro-RO',el:'el-GR',tr:'tr-TR',uk:'uk-UA',he:'he-IL'};
+const LN={auto:'自动',zh:'中文',en:'English',ja:'日本語',ko:'한국어',es:'Español',fr:'Français',de:'Deutsch',pt:'Português',ru:'Русский',ar:'العربية',hi:'हिन्दी',th:'ไทย',vi:'Tiếng Việt',id:'Indonesia',ms:'Melayu',tl:'Tagalog',bn:'বাংলা',ur:'اردو',fa:'فارسی',it:'Italiano',nl:'Nederlands',pl:'Polski',sv:'Svenska',da:'Dansk',no:'Norsk',fi:'Suomi',cs:'Čeština',hu:'Magyar',ro:'Română',el:'Ελληνικά',tr:'Türkçe',uk:'Українська',he:'עברית'};
+
+function hms(d){d=new Date(d);return[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':')}
+function ymdCn(d){d=new Date(d);return`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`}
+function ymd(d){d=new Date(d);return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// 环境检测
+const E={
+  sp(){return!!(window.SpeechRecognition||window.webkitSpeechRecognition)},
+  rc(){return typeof MediaRecorder!=='undefined'},
+  mic(){return!!(navigator.mediaDevices?.getUserMedia)},
+  fmt(){
+    if(typeof MediaRecorder==='undefined')return null;
+    const f=[{m:'audio/webm;codecs=opus',e:'webm'},{m:'audio/webm',e:'webm'},{m:'audio/mp4',e:'m4a'},{m:'audio/ogg;codecs=opus',e:'ogg'},{m:'audio/wav',e:'wav'}];
+    for(const x of f)if(MediaRecorder.isTypeSupported(x.m))return x;
+    return{m:'',e:'webm'};
+  },
+  mode(){
+    if(!this.mic())return'none';
+    if(this.sp()&&this.rc())return'dual';
+    if(this.rc())return'record';
+    if(this.sp())return'speech';
+    return'none';
+  }
+};
+
+// sessionStorage
+const SS={
+  K:'mf_entries',
+  save(arr){try{sessionStorage.setItem(this.K,JSON.stringify(arr))}catch{}},
+  load(){try{return JSON.parse(sessionStorage.getItem(this.K)||'[]')}catch{return[]}},
+  clear(){try{sessionStorage.removeItem(this.K)}catch{}}
+};
+
+const App={
+  mode:'none',fmt:null,lang:'',running:false,
+  rec:null,mr:null,stream:null,chunks:[],analyser:null,actx:null,
+  t0:0,elapsed:0,tRAF:null,interimEl:null,segIv:null,SEG:10000,
+  entries:[],
+  $:id=>document.getElementById(id),
+
+  init(){
+    this.mode=E.mode();this.fmt=E.fmt();
+
+    if(this.mode==='none'){
+      this.$('tl').innerHTML='<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">浏览器不支持</div><div class="empty-desc">请使用 Chrome、Edge 或 Safari 打开此页面</div></div>';
+      return;
+    }
+
+    // 恢复 session
+    this.entries=SS.load();
+    if(this.entries.length){
+      this.$('emptyState')?.remove();
+      this.entries.forEach(e=>this.renderEntry(e.text,e.time,false));
+    }
+
+    const sel=this.$('langSel');
+    sel.addEventListener('change',()=>{
+      if(!sel.value)return;
+      this.lang=sel.value;
+      this.$('recBtn').disabled=false;
+      this.$('sText').textContent='按下按钮开始录音';
+      this.$('sDot').className='status-dot s-idle';
+    });
+
+    this.$('recBtn').addEventListener('click',()=>{
+      if(this.running)this.stop();else this.start();
+    });
+    this.$('btnClear').addEventListener('click',()=>this.clearAll());
+    this.$('btnShare').addEventListener('click',()=>this.openShare());
+    this.$('shareClose').addEventListener('click',()=>this.$('shareOverlay').classList.remove('open'));
+    this.$('shareOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)e.target.classList.remove('open')});
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape'){
+        if(this.$('shareOverlay').classList.contains('open'))this.$('shareOverlay').classList.remove('open');
+        else if(this.running)this.stop();
+      }
+      if(e.code==='Space'&&e.target===document.body&&!this.$('recBtn').disabled){e.preventDefault();this.$('recBtn').click()}
+    });
+
+    // 定时保存 session
+    setInterval(()=>{if(this.entries.length)SS.save(this.entries)},3000);
+  },
+
+  async start(){
+    try{this.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
+    catch(e){this.toast(e.name==='NotAllowedError'?'请允许麦克风权限':'麦克风不可用');return}
+    this.running=true;this.t0=Date.now()-this.elapsed;
+    this.$('recBtn').classList.add('on');
+    this.$('recBtn').setAttribute('aria-label','停止录音');
+    this.$('emptyState')?.remove();
+    this.$('sDot').className='status-dot s-on';
+    this.$('sText').textContent='正在倾听...';
+    this.$('langSel').disabled=true;
+    this.startVol();this.tickT();
+    if(this.mode==='dual'||this.mode==='speech')this.startSR();
+    if(this.mode==='dual'||this.mode==='record'){this.startMR();this.segIv=setInterval(()=>this.cutSeg(),this.SEG)}
+  },
+
+  async stop(){
+    if(!this.running)return;this.running=false;this.elapsed=Date.now()-this.t0;
+    this.$('recBtn').classList.remove('on');
+    this.$('recBtn').setAttribute('aria-label','开始录音');
+    this.$('langSel').disabled=false;
+    await this.stopEngines();this.stopVol();
+    if(this.tRAF)cancelAnimationFrame(this.tRAF);
+    if(this.segIv){clearInterval(this.segIv);this.segIv=null}
+    if(this.stream){this.stream.getTracks().forEach(t=>t.stop());this.stream=null}
+    this.$('volFill').style.width='0%';
+    this.$('sDot').className='status-dot s-idle';
+    this.$('sText').textContent='已暂停 · 按按钮继续';
+    if(this.interimEl){this.interimEl.remove();this.interimEl=null}
+    SS.save(this.entries);
+  },
+
+  async stopEngines(){
+    if(this.rec){try{this.rec.abort()}catch{};this.rec=null}
+    if(this.mr&&this.mr.state!=='inactive'){
+      await new Promise(r=>{this.mr.onstop=r;this.mr.stop()});
+      if(this.chunks.length){const b=new Blob(this.chunks,{type:this.mr.mimeType||''});this.chunks=[];if(b.size>1000)this.sendW(b)}
+    }
+    this.mr=null;
+  },
+
+  startSR(){
+    const S=window.SpeechRecognition||window.webkitSpeechRecognition;if(!S)return;
+    const r=new S();r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
+    const b=BCP[this.lang];if(b)r.lang=b;
+    r.onresult=e=>{let it='',fi='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)fi+=t;else it+=t}if(fi)this.addEntry(fi);this.showInterim(it)};
+    r.onerror=e=>{if(e.error!=='no-speech'&&e.error!=='aborted')console.warn('SR:',e.error)};
+    r.onend=()=>{if(this.running&&(this.mode==='dual'||this.mode==='speech'))setTimeout(()=>{if(!this.running)return;try{const b2=BCP[this.lang];if(b2)r.lang=b2;r.start()}catch{}},150)};
+    try{r.start()}catch{};this.rec=r;
+  },
+
+  startMR(){
+    if(!this.stream)return;this.chunks=[];
+    const o={};if(this.fmt?.m)o.mimeType=this.fmt.m;
+    try{this.mr=new MediaRecorder(this.stream,o)}catch{try{this.mr=new MediaRecorder(this.stream)}catch{return}}
+    this.mr.ondataavailable=e=>{if(e.data.size>0)this.chunks.push(e.data)};
+    this.mr.start(1000);
+  },
+
+  cutSeg(){
+    if(!this.mr||this.mr.state==='inactive'||!this.chunks.length)return;
+    const b=new Blob(this.chunks,{type:this.mr.mimeType||''});this.chunks=[];
+    if(b.size>1000)this.sendW(b);
+  },
+
+  async sendW(blob){
+    const m=blob.type||'';let ext='webm';
+    if(m.includes('mp4')||m.includes('m4a'))ext='m4a';else if(m.includes('ogg'))ext='ogg';else if(m.includes('wav'))ext='wav';
+    const fd=new FormData();fd.append('audio',blob,`s.${ext}`);
+    if(this.lang&&this.lang!=='auto')fd.append('language',this.lang);
+    try{
+      const r=await fetch('/api/transcribe',{method:'POST',body:fd});
+      if(!r.ok)throw 0;const d=await r.json();
+      if(d.text?.trim()&&this.mode==='record')this.addEntry(d.text.trim());
+    }catch{}
+  },
+
+  addEntry(text){
+    if(!text.trim())return;
+    const now=Date.now();
+    this.entries.push({text:text.trim(),time:now,lang:this.lang});
+    if(this.interimEl){this.interimEl.remove();this.interimEl=null}
+    this.renderEntry(text.trim(),now,true);
+    SS.save(this.entries);
+  },
+
+  renderEntry(text,time,scroll){
+    const div=document.createElement('div');div.className='entry';
+    div.innerHTML=`<div class="entry-time">${hms(time)}</div><div class="entry-text">${esc(text)}</div>`;
+    this.$('tl').appendChild(div);
+    if(scroll)this.$('tl').scrollTop=this.$('tl').scrollHeight;
+  },
+
+  showInterim(text){
+    if(!text){if(this.interimEl){this.interimEl.remove();this.interimEl=null}return}
+    if(!this.interimEl){
+      const d=document.createElement('div');d.className='entry entry-live';
+      d.innerHTML=`<div class="entry-time">${hms(new Date())}</div><div class="entry-text"></div>`;
+      this.$('tl').appendChild(d);this.interimEl=d;
+    }
+    this.interimEl.querySelector('.entry-text').textContent=text;
+    this.$('tl').scrollTop=this.$('tl').scrollHeight;
+  },
+
+  // ===== Markdown =====
+  toMd(){
+    if(!this.entries.length)return'';
+    const now=new Date();const secs=Math.floor(this.elapsed/1000);
+    let md=`# 记忆流 · 语音记录\n\n`;
+    md+=`> **日期**：${ymdCn(now)}  \n`;
+    md+=`> **语言**：${LN[this.lang]||this.lang}  \n`;
+    md+=`> **时长**：${Math.floor(secs/60)}分${secs%60}秒  \n`;
+    md+=`> **条目**：${this.entries.length} 条  \n\n---\n\n`;
+    const hrs={};
+    this.entries.forEach(e=>{const h=`${String(new Date(e.time).getHours()).padStart(2,'0')}:00`;if(!hrs[h])hrs[h]=[];hrs[h].push(e)});
+    for(const h of Object.keys(hrs).sort()){
+      md+=`## ${h}\n\n`;
+      hrs[h].forEach(e=>{md+=`- **${hms(e.time)}** — ${e.text}\n`});
+      md+='\n';
+    }
+    md+=`---\n\n*由 记忆流 MemoryFlow 生成 · ${ymd(now)}*\n`;
+    return md;
+  },
+
+  toPlain(){
+    return this.entries.map(e=>`[${hms(e.time)}] ${e.text}`).join('\n');
+  },
+
+  // ===== 分享 =====
+  openShare(){
+    if(!this.entries.length){this.toast('还没有录入内容');return}
+    const md=this.toMd();
+    const plain=this.toPlain();
+    const title=`记忆流 · ${ymdCn(new Date())}`;
+    const encoded=encodeURIComponent(plain);
+    const encodedTitle=encodeURIComponent(title);
+
+    const grid=this.$('shareGrid');
+    let html='';
+
+    // 系统原生分享 (移动端)
+    if(navigator.share){
+      html+=`<div class="share-item" data-action="native"><div class="share-icon ic-native">📲</div><div class="share-label">系统分享</div></div>`;
+    }
+
+    // 下载 Markdown
+    html+=`<div class="share-item" data-action="download"><div class="share-icon ic-md">⬇</div><div class="share-label">下载 .md</div></div>`;
+
+    // 复制
+    html+=`<div class="share-item" data-action="copy"><div class="share-icon ic-copy">📋</div><div class="share-label">复制文本</div></div>`;
+    html+=`<div class="share-item" data-action="copymd"><div class="share-icon ic-md">📝</div><div class="share-label">复制 Markdown</div></div>`;
+
+    html+=`<div class="share-sep">发送到应用</div>`;
+
+    // Gmail
+    html+=`<a class="share-item" href="https://mail.google.com/mail/?view=cm&su=${encodedTitle}&body=${encoded}" target="_blank" rel="noopener"><div class="share-icon ic-gmail">✉</div><div class="share-label">Gmail</div></a>`;
+
+    // Google Docs (新建文档并粘贴)
+    html+=`<a class="share-item" href="https://docs.google.com/document/create" target="_blank" rel="noopener" data-action="gdoc"><div class="share-icon ic-gdoc">📄</div><div class="share-label">Google 文档</div></a>`;
+
+    // Email (通用)
+    html+=`<a class="share-item" href="mailto:?subject=${encodedTitle}&body=${encoded}"><div class="share-icon ic-email">📧</div><div class="share-label">邮件</div></a>`;
+
+    // WhatsApp
+    html+=`<a class="share-item" href="https://wa.me/?text=${encodeURIComponent(title+'\n\n'+plain)}" target="_blank" rel="noopener"><div class="share-icon ic-wa">💬</div><div class="share-label">WhatsApp</div></a>`;
+
+    // Telegram
+    html+=`<a class="share-item" href="https://t.me/share/url?url=${encodeURIComponent(' ')}&text=${encodeURIComponent(title+'\n\n'+plain)}" target="_blank" rel="noopener"><div class="share-icon ic-tg">✈</div><div class="share-label">Telegram</div></a>`;
+
+    // 微信 (无直接分享链接，提示复制)
+    html+=`<div class="share-item" data-action="wechat"><div class="share-icon ic-wechat">微</div><div class="share-label">微信</div></div>`;
+
+    // LINE
+    html+=`<a class="share-item" href="https://social-plugins.line.me/lineit/share?text=${encodeURIComponent(title+'\n\n'+plain)}" target="_blank" rel="noopener"><div class="share-icon ic-line">L</div><div class="share-label">LINE</div></a>`;
+
+    html+=`<div class="share-sep">Markdown 预览</div>`;
+    grid.innerHTML=html;
+
+    // 预览
+    this.$('mdPreview').textContent=md;
+    this.$('mdPreview').style.display='block';
+
+    // 事件绑定
+    grid.querySelectorAll('[data-action]').forEach(el=>{
+      el.addEventListener('click',()=>this.handleShareAction(el.dataset.action,plain,md,title));
+    });
+
+    this.$('shareOverlay').classList.add('open');
+  },
+
+  handleShareAction(action,plain,md,title){
+    switch(action){
+      case'native':
+        navigator.share({title,text:plain}).catch(()=>{});
+        break;
+      case'download':
+        const blob=new Blob([md],{type:'text/markdown;charset=utf-8'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;a.download=`记忆流_${ymd(new Date())}.md`;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        this.toast('已下载');
+        break;
+      case'copy':
+        navigator.clipboard.writeText(plain).then(()=>this.toast('已复制文本')).catch(()=>this.toast('复制失败'));
+        break;
+      case'copymd':
+        navigator.clipboard.writeText(md).then(()=>this.toast('已复制 Markdown')).catch(()=>this.toast('复制失败'));
+        break;
+      case'gdoc':
+        navigator.clipboard.writeText(plain).then(()=>this.toast('已复制，请在 Google 文档中粘贴'));
+        break;
+      case'wechat':
+        navigator.clipboard.writeText(plain).then(()=>this.toast('已复制，请打开微信粘贴发送')).catch(()=>this.toast('复制失败'));
+        break;
+    }
+  },
+
+  clearAll(){
+    if(this.running)this.stop();
+    this.entries=[];this.elapsed=0;SS.clear();
+    this.$('tl').innerHTML='<div class="empty" id="emptyState"><div class="empty-icon">🎙️</div><div class="empty-title">准备好了</div><div class="empty-desc">选择语言，按下圆形按钮开始录音<br>说的每句话都会记下来</div></div>';
+    this.$('timer').textContent='00:00';
+    this.$('sText').textContent=this.lang?'按下按钮开始录音':'选择语言以启用';
+  },
+
+  // 音量
+  startVol(){
+    if(!this.stream)return;
+    this.actx=new(window.AudioContext||window.webkitAudioContext)();
+    const s=this.actx.createMediaStreamSource(this.stream);
+    this.analyser=this.actx.createAnalyser();this.analyser.fftSize=256;
+    s.connect(this.analyser);const buf=new Uint8Array(this.analyser.frequencyBinCount);
+    const tick=()=>{if(!this.running)return;this.analyser.getByteFrequencyData(buf);
+      let sm=0;for(let i=0;i<buf.length;i++)sm+=buf[i];
+      this.$('volFill').style.width=Math.min(100,(sm/buf.length)*1.5)+'%';
+      this._vr=requestAnimationFrame(tick)};tick();
+  },
+  stopVol(){if(this._vr)cancelAnimationFrame(this._vr);if(this.actx){try{this.actx.close()}catch{};this.actx=null}},
+
+  tickT(){const tick=()=>{if(!this.running)return;const d=Date.now()-this.t0;this.elapsed=d;
+    const s=Math.floor(d/1000);this.$('timer').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+    this.tRAF=requestAnimationFrame(tick)};tick()},
+
+  toast(msg){const el=this.$('toast');el.textContent=msg;el.classList.add('on');clearTimeout(this._tt);this._tt=setTimeout(()=>el.classList.remove('on'),2500)},
+};
+
+document.addEventListener('DOMContentLoaded',()=>App.init());
+</script>
+</body>
+</html>

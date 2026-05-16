@@ -1,0 +1,12 @@
+{
+  "name": "memoryflow",
+  "main": "src/worker.js",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI"
+  },
+  "assets": {
+    "directory": "./public"
+  }
+}
