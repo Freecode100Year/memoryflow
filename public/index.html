@@ -20,7 +20,7 @@
 :root{
   --bg:#f7f5f0;--bg2:#efece5;--bg3:#e5e1d8;--bg4:#d6d1c6;
   --surface:#fff;
-  --tx:#2c2a25;--tx2:#5a574f;--tx3:#8a867d;--tx4:#b0ac a3;
+  --tx:#2c2a25;--tx2:#5a574f;--tx3:#8a867d;--tx4:#b0aca3;
   /* 主色：蓝 (行动/激活) */
   --blue:#1565c0;--blue-light:#e3f0fc;--blue-mid:#4a90d9;
   /* 辅色：橙 (强调/录音中) */
@@ -369,7 +369,7 @@ const App={
   mode:'none',fmt:null,lang:'',running:false,
   rec:null,mr:null,stream:null,chunks:[],analyser:null,actx:null,
   t0:0,elapsed:0,tRAF:null,interimEl:null,segIv:null,SEG:10000,
-  entries:[],
+  entries:[],lastSRTime:0,
   $:id=>document.getElementById(id),
 
   init(){
@@ -447,7 +447,7 @@ const App={
   },
 
   async stopEngines(){
-    if(this.rec){try{this.rec.abort()}catch{};this.rec=null}
+    if(this.rec){try{this.rec.stop()}catch{};this.rec=null}
     if(this.mr&&this.mr.state!=='inactive'){
       await new Promise(r=>{this.mr.onstop=r;this.mr.stop()});
       if(this.chunks.length){const b=new Blob(this.chunks,{type:this.mr.mimeType||''});this.chunks=[];if(b.size>1000)this.sendW(b)}
@@ -459,9 +459,9 @@ const App={
     const S=window.SpeechRecognition||window.webkitSpeechRecognition;if(!S)return;
     const r=new S();r.continuous=true;r.interimResults=true;r.maxAlternatives=1;
     const b=BCP[this.lang];if(b)r.lang=b;
-    r.onresult=e=>{let it='',fi='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)fi+=t;else it+=t}if(fi)this.addEntry(fi);this.showInterim(it)};
+    r.onresult=e=>{let it='',fi='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;if(e.results[i].isFinal)fi+=t;else it+=t}if(fi){this.lastSRTime=Date.now();this.addEntry(fi)}this.showInterim(it)};
     r.onerror=e=>{if(e.error!=='no-speech'&&e.error!=='aborted')console.warn('SR:',e.error)};
-    r.onend=()=>{if(this.running&&(this.mode==='dual'||this.mode==='speech'))setTimeout(()=>{if(!this.running)return;try{const b2=BCP[this.lang];if(b2)r.lang=b2;r.start()}catch{}},150)};
+    r.onend=()=>{if(this.running&&(this.mode==='dual'||this.mode==='speech'))setTimeout(()=>{if(!this.running)return;this.startSR()},150)};
     try{r.start()}catch{};this.rec=r;
   },
 
@@ -487,7 +487,10 @@ const App={
     try{
       const r=await fetch('/api/transcribe',{method:'POST',body:fd});
       if(!r.ok)throw 0;const d=await r.json();
-      if(d.text?.trim()&&this.mode==='record')this.addEntry(d.text.trim());
+      if(d.text?.trim()){
+        if(this.mode==='record')this.addEntry(d.text.trim());
+        else if(this.mode==='dual'&&Date.now()-this.lastSRTime>8000)this.addEntry(d.text.trim());
+      }
     }catch{}
   },
 

@@ -41,7 +41,7 @@ async function transcribe(req, env) {
     }
 
     const buf = await file.arrayBuffer();
-    const input = { audio: [...new Uint8Array(buf)] };
+    const input = { audio: new Uint8Array(buf) };
 
     if (lang && lang !== 'auto') {
       input.language = lang;
